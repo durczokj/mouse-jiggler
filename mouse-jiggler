@@ -7,9 +7,19 @@ if ! command -v cliclick &> /dev/null; then
     exit 1
 fi
 
+# Function to get an ISO timestamp
+get_iso_timestamp() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
 # Function to get current mouse position
 get_mouse_position() {
     cliclick p
+}
+
+# Function to check idle time
+check_idle_time() {
+    ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print $NF/1000000000; exit}'
 }
 
 # Function to move mouse to specific coordinates  
@@ -19,34 +29,25 @@ move_mouse() {
     cliclick m:$x,$y
 }
 
-# Function to get random number in range
-random_in_range() {
-    local min=$1
-    local max=$2
-    echo $(( RANDOM % (max - min + 1) + min ))
-}
-
 # Function to jiggle back and forth
 jiggle_mouse() {
-    local base_x=$1
-    local base_y=$2
+    # Get current mouse position
+    current_pos=$(get_mouse_position)
+    local base_x=$(echo "$current_pos" | cut -d',' -f1 | tr -d ' ')
+    local base_y=$(echo "$current_pos" | cut -d',' -f2 | tr -d ' ')
+
+    # Set initial direction
     local direction=1
     
-    echo "Starting jiggling pattern..."
-    
-    # Jiggle for up to 100 iterations but stop immediately if movement detected
+    echo "$(get_iso_timestamp) – Starting jiggle."
+
+    # Jiggle back and forth
     while true; do
-        # Check if user moved the mouse before each jiggle
-        current_pos=$(get_mouse_position)
-        current_x=$(echo "$current_pos" | cut -d',' -f1 | tr -d ' ')
-        current_y=$(echo "$current_pos" | cut -d',' -f2 | tr -d ' ')
-        
-        # If mouse position changed from base position, stop jiggling immediately
-        x_diff=$((current_x - base_x))
-        y_diff=$((current_y - base_y))
-        
-        if [ ${x_diff#-} -gt 2 ] || [ ${y_diff#-} -gt 2 ]; then
-            echo "User movement detected, stopping jiggle immediately"
+
+        # If user is active, stop jiggling
+        idle_time=$(check_idle_time)
+        if (( $(echo "$idle_time < 0.5" | bc -l) )); then
+            echo "$(get_iso_timestamp) – User is active. Stopping jiggle."
             return
         fi
         
@@ -57,39 +58,19 @@ jiggle_mouse() {
         # Alternate direction
         direction=$((-direction))
         
-        sleep 0.01
+        sleep 0.5
     done
-    
-    # Return to original position
-    move_mouse "$base_x" "$base_y"
-    echo "Jiggling complete, returned to original position"
 }
 
-echo "Mouse jiggler started. Press Ctrl+C to stop."
+echo "$(get_iso_timestamp) – Mouse jiggler started. Press Ctrl+C to stop."
 
 while true; do
-    # Get current mouse position
-    old_pos=$(get_mouse_position)
-    old_x=$(echo "$old_pos" | cut -d',' -f1 | tr -d ' ')
-    old_y=$(echo "$old_pos" | cut -d',' -f2 | tr -d ' ')
-    
     sleep 5
-    
-    # Get current mouse position again
-    current_pos=$(get_mouse_position)
-    current_x=$(echo "$current_pos" | cut -d',' -f1 | tr -d ' ')
-    current_y=$(echo "$current_pos" | cut -d',' -f2 | tr -d ' ')
-    
-    # Check if mouse hasn't moved much
-    x_diff=$((current_x - old_x))
-    y_diff=$((current_y - old_y))
-    
-    if [ ${x_diff#-} -lt 2 ] && [ ${y_diff#-} -lt 2 ]; then
-        # Get current time
-        current_time=$(date "+%Y-%m-%dT%H:%M:%S%z")
-        echo "$current_time – No movement detected, starting jiggle pattern"
-        
-        # Start jiggling back and forth
-        jiggle_mouse "$current_x" "$current_y"
+
+    idle_time=$(check_idle_time)
+
+    if (( $(echo "$idle_time > 5.0" | bc -l) )); then
+        echo "$(get_iso_timestamp) – No movement detected for over 5 seconds."
+        jiggle_mouse
     fi
 done

@@ -62,15 +62,20 @@ jiggle_mouse() {
     done
 }
 
-echo "$(get_iso_timestamp) – Mouse jiggler started. Press Ctrl+C to stop."
+# Main loop
+main() {
+    echo "$(get_iso_timestamp) – Mouse jiggler started. Press Ctrl+C to stop."
 
-while true; do
-    sleep 5
+    while true; do
+        sleep 5
 
-    idle_time=$(check_idle_time)
+        idle_time=$(check_idle_time)
 
-    if (( $(echo "$idle_time > 5.0" | bc -l) )); then
-        echo "$(get_iso_timestamp) – No movement detected for over 5 seconds."
-        jiggle_mouse
-    fi
-done
+        if (( $(echo "$idle_time > 5.0" | bc -l) )); then
+            echo "$(get_iso_timestamp) – No movement detected for over 5 seconds."
+            jiggle_mouse
+        fi
+    done
+}
+
+main
